@@ -1,15 +1,32 @@
 var aframe = (function () {
 
+
     //Here is where you should put all your rendering code, which will be private
     var scene;//The a-scene DOM element
     var id = 0;//The numerical id of each entity
+    var spritesheets = {};
+    var objects = [];
+
+    function applyComponents(componentsMap, entity) {
+        for (var componentName in componentsMap) {
+            var component = componentsMap[componentName];
+            for (var key in component) {
+                entity.setAttribute(componentName, key, component[key]);
+            }
+        }
+    }
+
     //And these are the public functions that the engine will use to talk to your library
     //You can leave the ones that aren't relevant for your implementation empty, and even send a warning via the debug handler
+
+
     return {
         setUp: function (canvas, nfps) {
+            document.body.removeChild(canvas); //A-frame doesn't need no stinking default canvas!
             scene = document.createElement('a-scene');
             scene.id = "a-frame-scene";
             document.body.appendChild(scene);
+            return id;
         },
         pauseAll: function () {
             //This function prevents the animation from updating (e.g doesn't advance to the next frame on each animation)
@@ -34,20 +51,33 @@ var aframe = (function () {
         },
         loadSpritesheetJSONObject: function (newspritesheets) {
             //This function loads a list of spritesheets from an array of JSON objects
+            newspritesheets.forEach(function (x) {
+                spritesheets[x.name] = x;
+            })
         },
         addObject: function (spritesheet, state, x, y, z, isstatic) {
-            var entity = document.createElement('a-entity');
+            var entity;
+            if (spritesheets[spritesheet].entity) {
+                entity = document.createElement(spritesheets[spritesheet].entity);
+            } else {
+                entity = document.createElement('a-entity');
+            }
             entity.id = "entity-" + (++id);
-            entity.setAtrribute('position', {x: x/100, y: y/100, z: z/100});
-            entity.setAttribute('geometry', {
-                primitive: 'box',
-                height: 3,
-                width: 1
-            });
-            entity.setAttribute('material', 'color', 'red');
+            entity.setAttribute('position', { x: x / 100, y: y / 100, z: z / 100 });
+            if (spritesheets[spritesheet].components) {
+                applyComponents(spritesheets[spritesheet].components, entity);
+            }
+            if (state && spritesheets[spritesheet].states && spritesheets[spritesheet].states[state]) {
+                applyComponents(spritesheets[spritesheet].states[state], entity);
+            }
+            if (spritesheets[spritesheet].innerHTML) {
+                entity.innerHTML = spritesheets[spritesheet].innerHTML;
+            }
             scene.appendChild(entity);
+            objects[id] = {
+                spritesheet: spritesheet
+            }
             return id;
-            // <a-entity id="box" geometry="primitive: box" material="color: red"></a-entity>
         },
         deleteObject: function (id) {
             //This function deletes the object with the given id
@@ -74,13 +104,26 @@ var aframe = (function () {
             //This function sets a parameter of an object
         },
         setState: function (id, state) {
-            //This function sets the state of an object
+            var entity = document.getElementById("entity-" + id);
+            var spritesheet = objects[id].spritesheet;
+            if (state && spritesheets[spritesheet].states && spritesheets[spritesheet].states[state]) {
+                applyComponents(spritesheets[spritesheet].states[state], entity);
+            }
         },
         setSpritesheet: function (id, s) {
             //This function sets the spritesheet of an object
         },
         sendCommand: function (command, commandArgs) {
-            //This function sends a command to your library, you can use this an extension point to provide additional functionality
+            switch (command) {
+                case "setMouseEnter":
+                    var entity = document.getElementById("entity-" + commandArgs.id);
+                    entity.addEventListener('mouseenter', commandArgs.callback);
+                    break;
+                case "setMouseLeave":
+                    var entity = document.getElementById("entity-" + commandArgs.id);
+                    entity.addEventListener('mouseleave', commandArgs.callback);
+                    break;
+            }
         },
         setObjectTimer: function (id, t) {
             //Sets the internal time of an object
@@ -119,3 +162,6 @@ var aframe = (function () {
         }
     };
 });
+
+CLOCKWORKRT.rendering.register("aframe", aframe);
+CLOCKWORKRT.rendering.setPipeline(["aframe"]);
